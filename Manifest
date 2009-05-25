@@ -71,6 +71,7 @@ server/files/etc/syslog.conf
 server/files/usr/bin/god
 server/files/usr/local/ec2onrails/bin/archive_file.rb
 server/files/usr/local/ec2onrails/bin/backup_app_db.rb
+server/files/usr/local/ec2onrails/bin/backup_dir.rb
 server/files/usr/local/ec2onrails/bin/ec2_meta_data.rb
 server/files/usr/local/ec2onrails/bin/exec_runner
 server/files/usr/local/ec2onrails/bin/init_services.rb
@@ -78,6 +79,7 @@ server/files/usr/local/ec2onrails/bin/optimize_mysql.rb
 server/files/usr/local/ec2onrails/bin/rails_env
 server/files/usr/local/ec2onrails/bin/rebundle.sh
 server/files/usr/local/ec2onrails/bin/restore_app_db.rb
+server/files/usr/local/ec2onrails/bin/restore_dir.rb
 server/files/usr/local/ec2onrails/bin/set_rails_env
 server/files/usr/local/ec2onrails/bin/set_roles.rb
 server/files/usr/local/ec2onrails/bin/setup_web_proxy.rb
