@@ -79,7 +79,6 @@ server/files/usr/local/ec2onrails/bin/optimize_mysql.rb
 server/files/usr/local/ec2onrails/bin/rails_env
 server/files/usr/local/ec2onrails/bin/rebundle.sh
 server/files/usr/local/ec2onrails/bin/restore_app_db.rb
-server/files/usr/local/ec2onrails/bin/restore_dir.rb
 server/files/usr/local/ec2onrails/bin/set_rails_env
 server/files/usr/local/ec2onrails/bin/set_roles.rb
 server/files/usr/local/ec2onrails/bin/setup_web_proxy.rb
