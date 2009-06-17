@@ -1,0 +1,15 @@
+staging:
+  hostname: SMTP_GATEWAY_HOSTNAME
+  port: SMTP_GATEWAY_PORT
+  username: YOUR_USERNAME
+  password: YOUR_PASSWORD
+  god_email_address: FROM_EMAIL_ADDRESS
+  concurrent_connections_limit: GATEWAY_LIMIT
+
+production:
+  hostname: SMTP_GATEWAY_HOSTNAME
+  port: SMTP_GATEWAY_PORT
+  username: YOUR_USERNAME
+  password: YOUR_PASSWORD
+  god_email_address: FROM_EMAIL_ADDRESS
+  concurrent_connections_limit: GATEWAY_LIMIT
