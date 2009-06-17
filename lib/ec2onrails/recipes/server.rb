@@ -315,13 +315,6 @@ Capistrano::Configuration.instance(:must_exist).load do
             raise "ERROR: missing the :service_domain key.  Please set that in your deploy script if you would like to use this task."
           end
           
-          # TODO: Set email address to send alerts as
-          # smtp_gateway_config['god_email_address']
-          # cfg[:smtp_gateway_god_email_address]
-          # Since notifications.god isn't easily changed over the wire, and we don't want to bounce god
-          # here, use postfix address rewriting for the from address instead:
-          # http://www.postfix.org/ADDRESS_REWRITING_README.html#generic
-
           smtp_gateway_config = YAML::load(ERB.new(File.read("config/smtp-gateway.yml")).result)[rails_env.to_s] || {}
           if (smtp_gateway_config['hostname'].nil? ||
               smtp_gateway_config['port'].nil? ||
