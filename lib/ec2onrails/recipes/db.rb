@@ -179,7 +179,7 @@ Capistrano::Configuration.instance.load do
             end
       			while !system( "ec2-describe-volumes | grep #{vol_id} | grep attached" )
       				puts "Waiting for #{vol_id} to be attached..."
-      				sleep 1            
+      				sleep 1
       			end
           end
           
@@ -270,6 +270,10 @@ FILE
             put(ebs_info.to_yaml, "/tmp/ebs_info.yml")
             sudo "mv /tmp/ebs_info.yml /etc/ec2onrails/ebs_info.yml"
             #lets start it back up
+            # For some reason, the tables on the volume don't show up if you just start here
+            # Stop and then start seems to do the trick.
+            stop
+            sleep(5)
             start  
           end #end of sudo
         end

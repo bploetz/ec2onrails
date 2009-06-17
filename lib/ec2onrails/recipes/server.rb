@@ -44,6 +44,26 @@ Capistrano::Configuration.instance(:must_exist).load do
       
       task :setup_web_proxy, :roles => :web do
         sudo "/usr/local/ec2onrails/bin/setup_web_proxy.rb --mode #{cfg[:web_proxy_server].to_s}"
+
+        # make sure god re-starts before moving on. Otherwise, this causes a race condition
+        # with set_roles, which will subsequently cause mongrel to start flapping, and thus
+        # cause god to spam you. If you're using an SMTP gateway, this can get very expensive
+        # very quickly.
+        running = false
+        counter = 1
+        while !running
+          break if counter == 7
+          puts "Waiting for god to restart"
+          god_status = quiet_capture("sudo god status")
+          god_status = god_status.empty? ? {} : YAML::load(god_status)
+          running = !god_status['web'].nil?
+          sleep(10)
+          counter = counter + 1
+        end
+        
+        if !running
+          raise "ERROR: god did not appear to restart after 1 minute."
+        end
       end
       
       task :setup_elastic_ip, :roles => :web do
@@ -274,6 +294,118 @@ Capistrano::Configuration.instance(:must_exist).load do
 
       end
     
+      
+      desc <<-DESC
+        Configures postfix to utilize an smtp gateway. Based on Paul's guide found here:
+        http://pauldowman.com/2008/02/17/smtp-mail-from-ec2-web-server-setup/
+        You must have a config/smtp-gateway.yml file defined with these properties defined for each environment:
+        hostname: the host name of your SMTP gateway provider.
+        port: the port to send mail to on the hostname. Some providers shut off the default port 25 for security reasons.
+              If your provider does not specify a specific host, use port 25.
+        username: your SMTP gateway provider username
+        password: your SMTP gateway provider password
+        god_email_address: The "from:" email address that god notifications are sent as. Some SMTP providers require you
+                           to set up each "from:" address you will be sending emails as through them. The default in
+                           notifications.god will result in bounced emails in this case, and must be overridden by this property.
+        concurrent_connections_limit: how many concurrent connections your provider allows.
+      DESC
+      task :configure_smtp_gateway, :roles => :app do
+        ec2onrails.server.allow_sudo do      
+          if cfg[:service_domain].nil? || cfg[:service_domain].empty?
+            raise "ERROR: missing the :service_domain key.  Please set that in your deploy script if you would like to use this task."
+          end
+          
+          # TODO: Set email address to send alerts as
+          # smtp_gateway_config['god_email_address']
+          # cfg[:smtp_gateway_god_email_address]
+          # Since notifications.god isn't easily changed over the wire, and we don't want to bounce god
+          # here, use postfix address rewriting for the from address instead:
+          # http://www.postfix.org/ADDRESS_REWRITING_README.html#generic
+
+          smtp_gateway_config = YAML::load(ERB.new(File.read("config/smtp-gateway.yml")).result)[rails_env.to_s] || {}
+          if (smtp_gateway_config['hostname'].nil? ||
+              smtp_gateway_config['port'].nil? ||
+              smtp_gateway_config['username'].nil? ||
+              smtp_gateway_config['password'].nil? ||
+              smtp_gateway_config['concurrent_connections_limit'].nil? ||
+              smtp_gateway_config['god_email_address'].nil?)
+            raise "ERROR: missing SMTP gateway config. Make sure config/smtp-gateway.yml is present and contains a '#{rails_env}' section with the following properties: hostname, port, username, password, concurrent_connections_limit, and god_email_address."
+          end
+
+          cfg[:smtp_gateway_hostname] ||= smtp_gateway_config['hostname']
+          cfg[:smtp_gateway_port] ||= smtp_gateway_config['port']
+          cfg[:smtp_gateway_username] ||= smtp_gateway_config['username']
+          cfg[:smtp_gateway_password] ||= smtp_gateway_config['password']
+          cfg[:smtp_gateway_concurrency_limit] ||= smtp_gateway_config['concurrent_connections_limit']
+          cfg[:smtp_gateway_god_email_address] ||= smtp_gateway_config['god_email_address']
+
+          concurrencyLimit = cfg[:smtp_gateway_concurrency_limit].to_i
+          if concurrencyLimit <= 0
+            raise "ERROR: 'concurrent_connections_limit' in config/smtp-gateway.yml must be a number > 0."
+          end
+
+          # default
+          outboundSmtpConnections = 1
+          appHosts = hostnames_for_role(:app)
+          if appHosts.length > cfg[:smtp_gateway_concurrency_limit]
+            overLimit = <<-OVER
+              WARNING: The number of servers in the :app role exceed the 'concurrent_connections_limit' value in config/smtp-gateway.yml.
+                       Some emails may not be sent as a result. Defaulting each :app server to use 1 connection to the SMTP gateway."
+            OVER
+            puts overLimit
+          else
+            if !appHosts.nil? && appHosts.length > 0
+              outboundSmtpConnections = cfg[:smtp_gateway_concurrency_limit].to_i / appHosts.length
+              outboundSmtpConnections.to_i # get rid of fractional parts (if any)
+            end
+          end
+          
+          # Since God notifications are set in notifications.god, and we don't want to update that file
+          # and restart god (which would cause god to start spamming at this point) we will use smtp_generic_maps
+          # to rewrite outgoing from addresses.
+          # http://www.postfix.org/ADDRESS_REWRITING_README.html#generic
+          # Note: this MUST match God::Contacts::Email.message_settings{:from} in notifications.god!
+          smtp_generic_maps = <<-SCRIPT 
+app@localhost   #{cfg[:smtp_gateway_god_email_address]}
+          SCRIPT
+
+          put smtp_generic_maps, "/tmp/smtp_generic_maps.tmp"
+          sudo "mv /tmp/smtp_generic_maps.tmp /etc/postfix/generic"
+          sudo "chown root:root /etc/postfix/generic"
+          sudo "chmod 644 /etc/postfix/generic"
+          sudo "postmap /etc/postfix/generic"
+          sudo "chown root:root /etc/postfix/generic.db"
+          sudo "chmod 644 /etc/postfix/generic.db"
+
+          cmds = <<-CMDS
+    sudo postconf -e 'myhostname = #{cfg[:service_domain]}';
+    sudo postconf -e 'mydomain = #{cfg[:service_domain]}';
+    sudo postconf -e 'myorigin = $mydomain';
+    sudo postconf -e 'smtp_banner = $myhostname ESMTP $mail_name';
+    sudo postconf -e 'biff = no';
+    sudo postconf -e 'append_dot_mydomain = no';
+    sudo postconf -e 'alias_maps = hash:/etc/aliases';
+    sudo postconf -e 'alias_database = hash:/etc/aliases';
+    sudo postconf -e 'smtp_generic_maps = hash:/etc/postfix/generic';
+    sudo postconf -e 'mydestination = localdomain, localhost, localhost.localdomain, localhost';
+    sudo postconf -e 'mynetworks = 127.0.0.0/8';
+    sudo postconf -e 'mailbox_size_limit = 0';
+    sudo postconf -e 'recipient_delimiter = +';
+    sudo postconf -e 'inet_interfaces = all';
+    sudo postconf -e 'relayhost = [#{cfg[:smtp_gateway_hostname]}]:#{cfg[:smtp_gateway_port]}';
+    sudo postconf -e 'smtp_connection_cache_destinations = #{cfg[:smtp_gateway_hostname]}';
+    sudo postconf -e 'smtp_sasl_auth_enable = yes';
+    sudo postconf -e 'smtp_sasl_password_maps = static:#{cfg[:smtp_gateway_username]}:#{cfg[:smtp_gateway_password]}';
+    sudo postconf -e 'smtp_sasl_security_options = noanonymous';
+    sudo postconf -e 'default_destination_concurrency_limit = #{outboundSmtpConnections}';
+    sudo postconf -e 'soft_bounce = yes';
+            CMDS
+          sudo cmds
+          sleep(10)
+          sudo "/etc/init.d/postfix restart 2>&1"
+        end
+      end
+      
       
       desc <<-DESC
         Install extra rubygems. Set ec2onrails_config[:rubygems], it should \

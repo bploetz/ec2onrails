@@ -5,6 +5,10 @@
 #      to run a script under a specific role
 #      see the file for details
 
+if ! test -e /mnt/app/current; then
+   exit 0;
+fi
+
 cd /mnt/app/current
 
 if test -e /mnt/app/current/script/cron/hourly; then 

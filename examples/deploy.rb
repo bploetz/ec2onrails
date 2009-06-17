@@ -76,6 +76,11 @@ set :ec2onrails_config, {
   #      ec2onrails_config[:service_domain] = 'staging.mydomain.com'
   :service_domain => nil,
   
+  # Configures postfix to send mails through an SMTP gateway (for example AuthSMTP).
+  # Note ec2onrails_config[:service_domain] must be set to the appropriate domain,
+  # and you must have config/smtp-gateway.yml present in your app
+  :enable_smtp_gateway => true,
+
   # Set the server timezone. run "cap -e ec2onrails:server:set_timezone" for 
   # details
   :timezone => "UTC",

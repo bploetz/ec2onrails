@@ -1,4 +1,6 @@
 God::Contacts::Email.message_settings = {
+  # NOTE:
+  # If this ever address ever changes, update ec2onrails.server.configure_smtp_gateway!
   :from => 'app@localhost'
 }
 

@@ -1,0 +1,8 @@
+/mnt/log/mail.err /mnt/log/mail.info /mnt/log/mail.log /mnt/log/mail.warn {
+  daily
+  rotate 7
+  sharedscripts
+  postrotate
+    pkill -HUP syslogd
+  endscript
+}

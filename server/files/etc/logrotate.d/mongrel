@@ -1,8 +1,9 @@
 /mnt/app/current/log/*/*.log /mnt/app/current/log/*.log {
   daily
+  nomail
   missingok
   dateext
-  rotate 365
+  rotate 7
   compress
   notifempty
   sharedscripts

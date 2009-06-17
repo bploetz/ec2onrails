@@ -129,6 +129,7 @@ Capistrano::Configuration.instance.load do
         server.restart_services
         deploy.setup
         db.create
+        server.configure_smtp_gateway if cfg[:enable_smtp_gateway]
         server.harden_server
         db.enable_ebs
         db.set_root_password

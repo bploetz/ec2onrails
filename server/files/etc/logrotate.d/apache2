@@ -1,5 +1,6 @@
 /mnt/log/apache2/*.log {
   daily
+  nomail
   missingok
   dateext
   create 640 root app

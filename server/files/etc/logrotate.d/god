@@ -1,11 +1,10 @@
-/mnt/log/nginx/*.log {
+/mnt/log/god.log {
   daily
   nomail
   missingok
   dateext
-  compress
   rotate 7
-  create 640 root app
+  compress
   notifempty
   sharedscripts
   extension gz
