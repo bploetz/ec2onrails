@@ -78,7 +78,6 @@ require "#{File.dirname(__FILE__)}/../lib/ec2onrails/version"
 #       support included
 @rubygems = [
   "grempe-amazon-ec2",
-  "aws-s3",
   "god",
   "RubyInline",
   "memcache-client",
@@ -90,13 +89,14 @@ require "#{File.dirname(__FILE__)}/../lib/ec2onrails/version"
   "rails -v '~> 2.1.2'",
   "rails -v '~> 2.0.5'",
   "rails -v '~> 1.2.6'",
-  "rake"
+  "rake",
+  "right_aws"
 ]
 
 @build_root = "/mnt/build"
 @fs_dir = "#{@build_root}/ubuntu"
 
-@version = [Ec2onrails::VERSION::STRING]
+@version = Ec2onrails::VERSION::STRING
 
 task :default => :configure
 
@@ -150,7 +150,7 @@ end
 desc "Install nginx from source"
 task :install_nginx => [:require_root, :install_packages, :install_gems] do |t|
   unless_completed(t) do
-    nginx_version = "nginx-0.6.36"
+    nginx_version = "nginx-0.7.60"
     nginx_tar = "#{nginx_version}.tar.gz"
 
     nginx_img = "http://sysoev.ru/nginx/#{nginx_tar}"
