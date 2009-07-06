@@ -329,14 +329,13 @@ if clean_stop
   puts <<-MSG
 Moving the old mysql ib logfiles because we might have changed the
 default logfile cache size.  If mysql startups up successfully,
-these files can be removed:
+these files will be removed:
   #{old_logs.join("\n  ")}
 MSG
 
 
-  # result = sudo("god start db_primary")
-  #using init.d instead of god, because god doesn't wait for the command to finish...
-  #it fires it off and then checks it in x seconds 
+  # Note: using init.d instead of god, because god doesn't wait for the command to finish,
+  # it simply fires it off and then checks it in x seconds
   result = sudo("/etc/init.d/mysql start")
   if result 
     puts <<-MSG
@@ -344,5 +343,11 @@ MSG
 mysql was not successfully started up.  
 Check syslog, as the culprit will be logged there.
 MSG
+  else
+    puts "MySQL successfully started. Removing old logs..."
+    old_logs.each do |old_log|
+      puts "Removing #{old_log}"
+      FileUtils.rm(old_log, :force => true)
+    end
   end
 end

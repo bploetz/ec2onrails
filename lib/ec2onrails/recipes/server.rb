@@ -253,19 +253,19 @@ Capistrano::Configuration.instance(:must_exist).load do
       desc <<-DESC
         Configures postfix to utilize an smtp gateway. Based on Paul's guide found here:
         http://pauldowman.com/2008/02/17/smtp-mail-from-ec2-web-server-setup/
-        You must have a config/smtp-gateway.yml file defined with these properties defined for each environment:
+        You must have a config/smtp-gateway.yml file with the following properties defined for each environment:
         hostname: the host name of your SMTP gateway provider.
         port: the port to send mail to on the hostname. Some providers shut off the default port 25 for security reasons.
               If your provider does not specify a specific host, use port 25.
         username: your SMTP gateway provider username
         password: your SMTP gateway provider password
-        god_email_address: The "from:" email address that god notifications are sent as. Some SMTP providers require you
-                           to set up each "from:" address you will be sending emails as through them. The default in
-                           notifications.god will result in bounced emails in this case, and must be overridden by this property.
+        system_from_email_address: The "from:" email address that system notifications from god and root are sent with.
+                                   Some SMTP providers require you to set up each "from:" address you will be sending
+                                   emails as through them.
         concurrent_connections_limit: how many concurrent connections your provider allows.
       DESC
       task :configure_smtp_gateway, :roles => :app do
-        ec2onrails.server.allow_sudo do      
+        allow_sudo do
           if cfg[:service_domain].nil? || cfg[:service_domain].empty?
             raise "ERROR: missing the :service_domain key.  Please set that in your deploy script if you would like to use this task."
           end
@@ -276,8 +276,8 @@ Capistrano::Configuration.instance(:must_exist).load do
               smtp_gateway_config['username'].nil? ||
               smtp_gateway_config['password'].nil? ||
               smtp_gateway_config['concurrent_connections_limit'].nil? ||
-              smtp_gateway_config['god_email_address'].nil?)
-            raise "ERROR: missing SMTP gateway config. Make sure config/smtp-gateway.yml is present and contains a '#{rails_env}' section with the following properties: hostname, port, username, password, concurrent_connections_limit, and god_email_address."
+              smtp_gateway_config['system_from_email_address'].nil?)
+            raise "ERROR: missing SMTP gateway config. Make sure config/smtp-gateway.yml is present and contains a '#{rails_env}' section with the following properties: hostname, port, username, password, concurrent_connections_limit, system_from_email_address."
           end
 
           cfg[:smtp_gateway_hostname] ||= smtp_gateway_config['hostname']
@@ -285,7 +285,7 @@ Capistrano::Configuration.instance(:must_exist).load do
           cfg[:smtp_gateway_username] ||= smtp_gateway_config['username']
           cfg[:smtp_gateway_password] ||= smtp_gateway_config['password']
           cfg[:smtp_gateway_concurrency_limit] ||= smtp_gateway_config['concurrent_connections_limit']
-          cfg[:smtp_gateway_god_email_address] ||= smtp_gateway_config['god_email_address']
+          cfg[:smtp_gateway_system_from_email_address] ||= smtp_gateway_config['system_from_email_address']
 
           concurrencyLimit = cfg[:smtp_gateway_concurrency_limit].to_i
           if concurrencyLimit <= 0
@@ -308,33 +308,48 @@ Capistrano::Configuration.instance(:must_exist).load do
             end
           end
           
-          # Since God notifications are set in notifications.god, use smtp_generic_maps
-          # to rewrite outgoing from addresses.
-          # http://www.postfix.org/ADDRESS_REWRITING_README.html#generic
-          # Note: this MUST match God::Contacts::Email.message_settings{:from} in notifications.god!
-          smtp_generic_maps = <<-SCRIPT 
-app@localhost   #{cfg[:smtp_gateway_god_email_address]}
+          # What's going on here? Since God and root notifications are sent to local email accounts,
+          # we need to use sender_canonical_maps to rewrite the sender address of system notifications
+          # to system_from_email_address from smtp_gateway.yml. In addition, we also use
+          # recipient_canonical_maps to set the recipient address :mail_forward_address from the cap deploy file.
+          # See: http://www.postfix.org/ADDRESS_REWRITING_README.html
+          # NOTE: "localhost" is intentionally left out of the root address below!
+          sender_canonical_maps = <<-SCRIPT 
+app@localhost.#{cfg[:service_domain]}   #{cfg[:smtp_gateway_system_from_email_address]}
+root@#{cfg[:service_domain]}   #{cfg[:smtp_gateway_system_from_email_address]}
           SCRIPT
 
-          put smtp_generic_maps, "/tmp/smtp_generic_maps.tmp"
-          sudo "mv /tmp/smtp_generic_maps.tmp /etc/postfix/generic"
-          sudo "chown root:root /etc/postfix/generic"
-          sudo "chmod 644 /etc/postfix/generic"
-          sudo "postmap /etc/postfix/generic"
-          sudo "chown root:root /etc/postfix/generic.db"
-          sudo "chmod 644 /etc/postfix/generic.db"
+          put sender_canonical_maps, "/tmp/sender_canonical.tmp"
+          sudo "mv /tmp/sender_canonical.tmp /etc/postfix/sender_canonical"
+          sudo "chown root:root /etc/postfix/sender_canonical"
+          sudo "chmod 644 /etc/postfix/sender_canonical"
+          sudo "postmap /etc/postfix/sender_canonical"
+          sudo "chown root:root /etc/postfix/sender_canonical.db"
+          sudo "chmod 644 /etc/postfix/sender_canonical.db"
+
+          recipient_canonical_maps = <<-SCRIPT 
+app@localhost.#{cfg[:service_domain]}   #{cfg[:mail_forward_address]}
+root@localhost.#{cfg[:service_domain]}   #{cfg[:mail_forward_address]}
+          SCRIPT
+
+          put recipient_canonical_maps, "/tmp/recipient_canonical.tmp"
+          sudo "mv /tmp/recipient_canonical.tmp /etc/postfix/recipient_canonical"
+          sudo "chown root:root /etc/postfix/recipient_canonical"
+          sudo "chmod 644 /etc/postfix/recipient_canonical"
+          sudo "postmap /etc/postfix/recipient_canonical"
+          sudo "chown root:root /etc/postfix/recipient_canonical.db"
+          sudo "chmod 644 /etc/postfix/recipient_canonical.db"
 
           cmds = <<-CMDS
-    sudo postconf -e 'myhostname = #{cfg[:service_domain]}';
+    sudo postconf -e 'myhostname = localhost';
     sudo postconf -e 'mydomain = #{cfg[:service_domain]}';
     sudo postconf -e 'myorigin = $mydomain';
-    sudo postconf -e 'smtp_banner = $myhostname ESMTP $mail_name';
     sudo postconf -e 'biff = no';
-    sudo postconf -e 'append_dot_mydomain = no';
     sudo postconf -e 'alias_maps = hash:/etc/aliases';
     sudo postconf -e 'alias_database = hash:/etc/aliases';
-    sudo postconf -e 'smtp_generic_maps = hash:/etc/postfix/generic';
-    sudo postconf -e 'mydestination = localdomain, localhost, localhost.localdomain, localhost';
+    sudo postconf -e 'sender_canonical_maps = hash:/etc/postfix/sender_canonical';
+    sudo postconf -e 'recipient_canonical_maps = hash:/etc/postfix/recipient_canonical';
+    sudo postconf -e 'mydestination = $mydomain';
     sudo postconf -e 'mynetworks = 127.0.0.0/8';
     sudo postconf -e 'mailbox_size_limit = 0';
     sudo postconf -e 'recipient_delimiter = +';
@@ -348,7 +363,6 @@ app@localhost   #{cfg[:smtp_gateway_god_email_address]}
     sudo postconf -e 'soft_bounce = yes';
             CMDS
           sudo cmds
-          sleep(10)
           sudo "/etc/init.d/postfix restart 2>&1"
         end
       end
@@ -497,17 +511,25 @@ app@localhost   #{cfg[:smtp_gateway_god_email_address]}
       end
     
       desc <<-DESC
-      Enable ssl for the web server. You'll want to replace the default SSL
-      certificate and key files, the certificate file is at
-      /etc/ec2onrails/ssl/cert/ec2onrails-default.crt
-      and a the key file is at
-      /etc/ec2onrails/ssl/private/ec2onrails-default.key
-      (use the deploy_files task).
-      The key file should NOT have a passphrase.
+      Enables SSL in nginx and deploys the application SSL certs.
       DESC
       task :enable_ssl, :roles => :web do
-        # TODO: enable for nginx
-        # run_init_script("nginx", "restart")
+        allow_sudo do
+          sudo "mv /etc/nginx/ssl.conf /etc/nginx/sites-enabled/ssl.conf"
+          if !cfg[:ssl_certificate_file].nil? && !cfg[:ssl_certificate_key_file].nil?
+            put File.read("config/ssl/#{cfg[:ssl_certificate_file]}"), "/tmp/ssl.crt"
+            put File.read("config/ssl/#{cfg[:ssl_certificate_key_file]}"), "/tmp/ssl.key"
+
+            sudo "mv /tmp/ssl.crt /etc/ec2onrails/ssl/cert/ec2onrails-default.crt"
+            sudo "chown root:root /etc/ec2onrails/ssl/cert/ec2onrails-default.crt"
+            sudo "chmod 644 /etc/ec2onrails/ssl/cert/ec2onrails-default.crt"
+
+            sudo "mv /tmp/ssl.key /etc/ec2onrails/ssl/private/ec2onrails-default.key"
+            sudo "chown root:root /etc/ec2onrails/ssl/private/ec2onrails-default.key"
+            sudo "chmod 644 /etc/ec2onrails/ssl/private/ec2onrails-default.key"
+          end
+          run_init_script("nginx", "restart")
+        end
       end
       
       desc <<-DESC

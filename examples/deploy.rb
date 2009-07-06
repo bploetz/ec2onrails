@@ -100,9 +100,17 @@ set :ec2onrails_config, {
   # remove this.
   :mail_forward_address => "you@yourdomain.com",
   
-  # Set this if you want SSL to be enabled on the web server. The SSL cert 
-  # and key files need to exist on the server, The cert file should be in
-  # /etc/ssl/certs/default.pem and the key file should be in
-  # /etc/ssl/private/default.key (see :server_config_files_root).
-  :enable_ssl => true
+  # Set this to true if you want SSL enabled in the web server.
+  :enable_ssl => true,
+  
+  # The following properties reference your site's SSL certificate and private key files
+  # (used with :enable_ssl above). If you will not be enabling SSL you can comment these out.
+  # These files should be placed in <RAILS_ROOT>/config/ssl.
+  # NOTE: If you were issued a certificate chain file along with your SSL certs, you don’t
+  # explicitly configure a pointer to it in nginx like you do in Apache. Instead, you need
+  # to add the information from the chain cert to the end of your main certificate file.
+  # This can be done by performing the following on the command line:
+  # “cat chain.crt >> www_mysite_com.crt”
+  :ssl_certificate_file => "www_mysite_com.crt",
+  :ssl_certificate_key_file => "www_mysite_com.key"
 }

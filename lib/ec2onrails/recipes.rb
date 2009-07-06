@@ -129,9 +129,10 @@ Capistrano::Configuration.instance.load do
         server.run_rails_rake_gems_install
         server.deploy_files # DEPRECATED, see install_system_files
         server.install_system_files
+        server.set_rails_env
         server.set_roles
         server.enable_ssl if cfg[:enable_ssl]
-        server.set_rails_env
+        server.configure_smtp_gateway if cfg[:enable_smtp_gateway]
         server.restart_services
         db.create
         server.harden_server

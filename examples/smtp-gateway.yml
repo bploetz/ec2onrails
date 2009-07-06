@@ -3,7 +3,7 @@ staging:
   port: SMTP_GATEWAY_PORT
   username: YOUR_USERNAME
   password: YOUR_PASSWORD
-  god_email_address: FROM_EMAIL_ADDRESS
+  system_from_email_address: SYSTEM_FROM_EMAIL_ADDRESS
   concurrent_connections_limit: GATEWAY_LIMIT
 
 production:
@@ -11,5 +11,5 @@ production:
   port: SMTP_GATEWAY_PORT
   username: YOUR_USERNAME
   password: YOUR_PASSWORD
-  god_email_address: FROM_EMAIL_ADDRESS
+  system_from_email_address: SYSTEM_FROM_EMAIL_ADDRESS
   concurrent_connections_limit: GATEWAY_LIMIT

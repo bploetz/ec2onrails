@@ -1,0 +1,10 @@
+  server {
+    listen 443;
+    server_name _;
+
+    include /etc/nginx/sites-enabled/common.include;
+ 
+    ssl on;
+    ssl_certificate /etc/ec2onrails/ssl/cert/ec2onrails-default.crt;
+    ssl_certificate_key /etc/ec2onrails/ssl/private/ec2onrails-default.key;  
+  }

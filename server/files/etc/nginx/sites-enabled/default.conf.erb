@@ -1,0 +1,37 @@
+  server {
+    listen 80;
+    server_name _;
+    
+    include /etc/nginx/sites-enabled/common.include;
+
+    # uncomment to force a redirect to www
+    # if ($host ~* "^[ec2onrails].com$"){
+    #   rewrite ^(.*)$ http://www.[ec2onrails].com$1 permanent;
+    #   break;
+    # }
+    
+    # uncomment if you want to allow or force some or all pages to go to http:// instead of https://
+    # if redirecting all to https, you won't need any of the other directives below their rewrite/break
+    # set $sub 'www';
+    # if  ($host ~* "^(.+?)\.[ec2onrails].com$"){
+    #        set $sub $1;
+    # }
+    # 
+    # if ( $uri ~* "^/.+$") {
+    #    rewrite ^(.*)$ https://$sub.[ec2onrails].com$1 permanent;
+    #    break;
+    # }
+    
+    # see http://wiki.codemongers.com/NginxHttpStubStatusModule
+    # for more information
+    location /nginx_status {
+      # copied from http://blog.kovyrin.net/2006/04/29/monitoring-nginx-with-rrdtool/
+      stub_status on;
+      access_log   off;
+      #only allow from localhost
+      allow 127.0.0.1;
+      deny all;
+    }
+    
+    include /etc/nginx/sites-enabled/custom.conf;
+  }
